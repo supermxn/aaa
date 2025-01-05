@@ -1,0 +1,84 @@
+name: hdos
+version: 1.0.8
+summary: HDOS, or High Detail Old School, is a free-to-use third party client for Old School RuneScape that emulates the era of 2008-2011 RuneScape HD.
+description: |
+  HDOS is a community project that is restoring the high detail graphics of RuneScape while maintaining its original charm.
+
+base: core22
+type: app
+grade: stable
+confinement: strict
+icon: snap/gui/hdos.png
+website: https://hdos.dev
+license: Proprietary
+compression: lzo
+
+platforms:
+  amd64:
+
+parts:
+  adoptopenjdk:
+    plugin: dump
+    source: https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.25%2B9/OpenJDK11U-jre_x64_linux_hotspot_11.0.25_9.tar.gz
+    source-checksum: "sha256/84cd7101f39172a4db085fb52940595bb14dad6bc3afb5bf82ee497eceaf86d3"
+    stage-packages:
+      - libxi6
+      - libxrender1
+      - libxtst6
+
+  hdos:
+    plugin: nil
+    build-packages: 
+      - wget
+    stage-packages:
+      - libglu1-mesa
+      - libpulse0
+      - libasound2
+      - libasound2-plugins
+      - libnotify-bin
+    override-pull: |
+      wget https://cdn.hdos.dev/launcher/v8/hdos-launcher.jar -O $CRAFT_PART_SRC/hdos-launcher.jar
+      echo "d3475d791fa8bfa4e3ae7fa9b1c5e86a8e02d1e93f88ff4776582af78ea92fc0 $CRAFT_PART_SRC/hdos-launcher.jar" | sha256sum --check || exit 1 # Check hash manually, due to nil plugin
+    override-build: |
+      cp $CRAFT_PART_BUILD/hdos-launcher.jar $CRAFT_PART_INSTALL/hdos-launcher.jar
+      chmod +x $CRAFT_PART_INSTALL/hdos-launcher.jar
+
+  alsa-pulseaudio:
+    plugin: dump
+    source: .
+    override-pull: |
+      mkdir etc -p
+      cat > etc/asound.conf <<EOF
+      pcm.!default {
+          type pulse
+          fallback "sysdefault"
+          hint {
+              show on
+              description "Default ALSA Output"
+          }
+      }
+      ctl.!default {
+          type pulse
+          fallback "sysdefault"
+      }
+      EOF
+
+layout:
+  /usr/lib/$SNAPCRAFT_ARCH_TRIPLET/alsa-lib:
+    bind: $SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/alsa-lib
+
+apps:
+  hdos:
+    extensions: [ gnome ]
+    command: bin/java -jar $SNAP/hdos-launcher.jar
+    plugs:
+      - desktop
+      - desktop-legacy
+      - audio-playback
+      - network
+      - opengl
+      - x11
+
+    environment:
+      _JAVA_OPTIONS: -Duser.home="$SNAP_USER_COMMON"
+      ALSA_CONFIG_PATH: "$SNAP/etc/asound.conf"
